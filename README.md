@@ -56,6 +56,26 @@ python scripts/calibrate_binoculars_threshold.py \
 Using an uncalibrated pair raises `ValueError` rather than silently reusing the
 Falcon threshold.
 
+## GUI
+
+A Gradio interface (`demo/app.py`) provides: text paste or `.txt` file upload,
+a checkbox per available detector (watermark detectors are discovered from
+`watermark/registry.py`; Binoculars is a separate toggle), a color-coded risk
+gauge (`demo/gauge.py`, plain inline SVG, no plotting dependency), and a
+results panel that always shows the aggregated verdict plus the raw
+score/confidence/details from every method that ran.
+
+```
+pip install -e .[demo]
+python -m demo.app
+```
+
+To add a new watermarking system to the GUI: implement a `WatermarkDetector`
+under `watermark/<name>/`, call `register()` on a `WatermarkDetectorSpec` in
+that subpackage's `__init__.py`, then add `import watermark.<name>` to
+`demo/app.py`. It appears as a new checkbox automatically — no other code
+changes needed.
+
 ## Install
 
 ```
@@ -63,7 +83,7 @@ pip install -e .[dev]
 ```
 
 Add `.[calibration]` for the calibration script's scikit-learn dependency, or
-`.[demo]` for a Gradio UI dependency set (not yet wired up).
+`.[demo]` for the Gradio UI dependency set.
 
 ## Tests
 
