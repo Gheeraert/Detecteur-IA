@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "llm-text-forensics"
+version = "0.1.0"
+description = "Unified LLM-generated text detection: watermark detectors (SynthID, extensible) prioritized over the statistical Binoculars detector"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+dependencies = [
+    "torch>=2.2",
+    "transformers>=4.44",
+    "sentencepiece",
+    "numpy",
+]
+
+[project.optional-dependencies]
+calibration = [
+    "scikit-learn",
+]
+demo = [
+    "gradio",
+    "gradio_client",
+]
+dev = [
+    "pytest",
+]
+
+[tool.setuptools.packages.find]
+include = ["common*", "watermark*", "statistical*", "aggregator*"]
