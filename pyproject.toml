@@ -12,6 +12,7 @@ license = { text = "Apache-2.0" }
 dependencies = [
     "torch>=2.2",
     "transformers>=4.44",
+    "accelerate>=0.26",
     "sentencepiece",
     "numpy",
 ]

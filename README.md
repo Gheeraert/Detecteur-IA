@@ -1,95 +1,70 @@
-# llm-text-forensics
+# LLM Text Forensics
 
-Unified research tool for detecting LLM-generated / watermarked text. Merges two
-detection strategies behind one interface:
+Outil de recherche pour la détection de texte généré par IA, combinant deux
+familles de méthodes complémentaires :
 
-- **`watermark/`** — cryptographic watermark detectors. Currently `SynthIDDetector`
-  (Weighted Mean scoring, ported from
-  [google-deepmind/synthid-text](https://github.com/google-deepmind/synthid-text)).
-  Only recognizes the SynthID watermark applied with the reference implementation's
-  default keys — extend this package (e.g. `watermark/anthropic/`, `watermark/kgw/`)
-  to add other schemes without touching the rest of the tool.
-- **`statistical/`** — heuristic zero-shot detectors. Currently `BinocularsDetector`,
-  ported from [ahans30/Binoculars](https://github.com/ahans30/Binoculars).
+- **Détection de watermark** — recherche la signature statistique laissée
+  volontairement dans le texte par un modèle qui applique un watermark au
+  moment de la génération (ex. SynthID). Fiable quand elle détecte un
+  watermark, mais ne fonctionne que si le modèle générateur en a posé un.
+- **Détection statistique (zero-shot)** — ne suppose aucun watermark ;
+  compare la perplexité du texte entre deux modèles de langage (un
+  "observateur" et un "performeur") pour estimer s'il a été produit par un
+  LLM (méthode Binoculars).
 
-Every detector implements the same interface:
+Les résultats par méthode sont combinés par `aggregator/` en un verdict
+unique avec un niveau de confiance, exposé via une interface Gradio
+(`demo/app.py`).
 
-```python
-def analyze(self, text: str) -> DetectionResult:
-    ...  # label, score, confidence, method_name, details
-```
-
-## Aggregation
-
-`aggregator.ForensicsAggregator` combines both families with a **priority rule**,
-not a weighted average: a positive watermark verdict is treated as strong,
-near-direct evidence and wins outright. Absent a watermark hit, it falls back
-to the statistical (Binoculars) verdict, with confidence discounted to reflect
-that it's a heuristic rather than a positive signal. Both raw
-`DetectionResult`s are always kept on the `AggregatedResult` for traceability.
-
-```python
-from aggregator import ForensicsAggregator
-from watermark.synthid import SynthIDDetector
-from statistical import BinocularsDetector
-
-aggregator = ForensicsAggregator(
-    watermark_detectors=[SynthIDDetector()],
-    statistical_detector=BinocularsDetector(),
-)
-result = aggregator.analyze(some_text)
-```
-
-## Binoculars threshold calibration
-
-Binoculars' decision threshold (`statistical/binoculars/config.py`) is specific
-to the observer/performer model pair it was calibrated on — the shipped value
-is only valid for Falcon-7B / Falcon-7B-Instruct. If you switch model pairs
-(e.g. for better results on non-English text), recalibrate first:
+## Architecture
 
 ```
-python scripts/calibrate_binoculars_threshold.py \
-    --observer <model> --performer <model> \
-    --human-texts-dir <dir> --ai-texts-dir <dir>
+common/         types partagés (DetectionResult, ...)
+watermark/      détecteurs de watermark (SynthID, extensible)
+statistical/    détecteur statistique Binoculars
+aggregator/     combine les résultats des détecteurs en un verdict unique
+demo/           interface Gradio (coller/importer un texte, jauge de risque)
 ```
 
-Using an uncalibrated pair raises `ValueError` rather than silently reusing the
-Falcon threshold.
+## Installation
 
-## GUI
-
-A Gradio interface (`demo/app.py`) provides: text paste or `.txt` file upload,
-a checkbox per available detector (watermark detectors are discovered from
-`watermark/registry.py`; Binoculars is a separate toggle), a color-coded risk
-gauge (`demo/gauge.py`, plain inline SVG, no plotting dependency), and a
-results panel that always shows the aggregated verdict plus the raw
-score/confidence/details from every method that ran.
-
-```
+```bash
 pip install -e .[demo]
+```
+
+## Lancer la démo
+
+```bash
 python -m demo.app
 ```
 
-To add a new watermarking system to the GUI: implement a `WatermarkDetector`
-under `watermark/<name>/`, call `register()` on a `WatermarkDetectorSpec` in
-that subpackage's `__init__.py`, then add `import watermark.<name>` to
-`demo/app.py`. It appears as a new checkbox automatically — no other code
-changes needed.
+Ouvrez ensuite http://127.0.0.1:7860.
 
-## Install
+## Limites connues
 
-```
-pip install -e .[dev]
-```
+La détection statistique (Binoculars) cible la signature d'un texte
+échantillonné brut par un LLM. Un texte généré avec beaucoup de RAG
+(passages issus de documents réels, cités ou reformulés) ou fortement
+retravaillé après génération se rapproche statistiquement d'un texte humain
+et peut échapper à la détection. Les seuils de décision fournis sont en
+outre calibrés pour une paire de modèles précise (falcon-7b /
+falcon-7b-instruct, cf. `statistical/binoculars/config.py`) et ne se
+transposent pas automatiquement à d'autres modèles ou langues.
 
-Add `.[calibration]` for the calibration script's scikit-learn dependency, or
-`.[demo]` for the Gradio UI dependency set.
+## Crédits
 
-## Tests
+Ce projet s'appuie sur les implémentations et travaux de recherche suivants :
 
-```
-pytest
-```
+- **[Binoculars](https://github.com/ahans30/Binoculars)** — Hans, Abhimanyu,
+  et al. *"Spotting LLMs With Binoculars: Zero-Shot Detection of Machine-
+  Generated Text."* ([arXiv:2401.12070](https://arxiv.org/abs/2401.12070)).
+  Le détecteur statistique de ce dépôt (`statistical/binoculars/`) est porté
+  depuis leur implémentation de référence.
+- **[SynthID Text](https://github.com/google-deepmind/synthid-text)** —
+  Google DeepMind. Le détecteur de watermark (`watermark/synthid/`)
+  s'appuie sur leur implémentation de référence du schéma de watermarking
+  SynthID.
 
-All tests run against synthetic tensors / fake detectors — no model downloads
-required, so each detector and the aggregator are testable independently.
+## Licence
+
+Apache-2.0, voir [LICENSE](LICENSE).
